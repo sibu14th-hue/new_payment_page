@@ -361,24 +361,24 @@
         // --- Configuration: Content List ---
         const dailyContentList = [
             "https://res.cloudinary.com/dh8bheu7j/image/upload/01_apgivg.jpg",
-            `<iframe src="https://player.cloudinary.com/embed/?cloud_name=dh8bheu7j&public_id=05_i4shvj&profile=cld-default" width="100%" height="100%" style="height: 100%; width: 100%;" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>`,
+            `<iframe src="https://player.cloudinary.com/embed/?cloud_name=dh8bheu7j&public_id=05_i4shvj&profile=cld-default" width="100%" height="100%" style="height: 100%; width: 100%; aspect-ratio: 640 / 360;" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>`,
             "https://res.cloudinary.com/dh8bheu7j/image/upload/04_oayot6.jpg",
             "https://res.cloudinary.com/dh8bheu7j/image/upload/01_wauvol.png",
-            `<iframe src="https://player.cloudinary.com/embed/?cloud_name=dh8bheu7j&public_id=02_tvytbl&profile=cld-default" width="100%" height="100%" style="height: 100%; width: 100%;" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>`
+            `<iframe src="https://player.cloudinary.com/embed/?cloud_name=dh8bheu7j&public_id=02_tvytbl&profile=cld-default" width="100%" height="100%" style="height: 100%; width: 100%; aspect-ratio: 640 / 360;" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>`
         ];
 
         // --- Logic: Render Content into Slots ---
         function renderDailyContent(date) {
-            // Modified: Calculate Global Minute (Total minutes since Epoch)
-            // This ensures the content index changes every 60 seconds
-            const globalMinute = Math.floor(date.getTime() / (1000 * 60));
+            // Modified: Calculate Global 10-Second Interval
+            // This ensures the content index changes every 10 seconds for testing
+            const timeInterval = Math.floor(date.getTime() / 10000); // 10 seconds
             
             const len = dailyContentList.length;
             
-            // Calculate indices based on global minute, looping automatically
-            const idx1 = globalMinute % len;
-            const idx2 = (globalMinute + 1) % len;
-            const idx3 = (globalMinute + 2) % len;
+            // Calculate indices based on global interval, looping automatically
+            const idx1 = timeInterval % len;
+            const idx2 = (timeInterval + 1) % len;
+            const idx3 = (timeInterval + 2) % len;
 
             // Update DOM
             updateSlot('dailySlot1', dailyContentList[idx1], false);
@@ -429,8 +429,12 @@
                         <p class="text-[8px] text-white/80 font-medium leading-tight">Check back tomorrow<br>for more free content</p>
                     </div>`;
                 
-                slot.onclick = null;
-                slot.classList.remove('cursor-pointer');
+                // Modified: Clicking locked daily items opens the main payment/locked modal
+                slot.onclick = function() {
+                    closeDailyFreeModal(); // Close current modal
+                    setTimeout(openModal, 300); // Open "Locked Content" modal (same as main page locked items)
+                };
+                slot.classList.add('cursor-pointer');
             }
 
             slot.innerHTML = contentHTML + overlayHTML;
@@ -449,21 +453,56 @@
         // --- Expanded Modal Logic ---
         function openExpandedModal(content) {
             const container = document.getElementById('expandedContent');
-            let html = '';
             
+            // Check if content is an iframe (video) or image
             if (content.trim().startsWith('<iframe')) {
-                // Wrap iframe for sizing
-                html = `<div class="w-full h-full min-w-[300px] md:min-w-[600px] aspect-video">${content}</div>`;
+                // Create a temporary element to manipulate the HTML safely
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = content;
+                const iframe = tempDiv.querySelector('iframe');
+                
+                if (iframe) {
+                    // 1. Inject Autoplay & Loop into SRC
+                    let src = iframe.getAttribute('src');
+                    // Check if query params start with ? or &
+                    const separator = src.includes('?') ? '&' : '?';
+                    
+                    // Add params if not already present
+                    if (!src.includes('autoplay=true')) src += `${separator}autoplay=true`;
+                    if (!src.includes('loop=true')) src += `&loop=true`;
+                    
+                    iframe.setAttribute('src', src);
+                    
+                    // 2. Ensure allow="autoplay" is present for browsers to permit it
+                    let allow = iframe.getAttribute('allow') || '';
+                    if (!allow.includes('autoplay')) {
+                        allow = allow ? `${allow}; autoplay` : 'autoplay';
+                        iframe.setAttribute('allow', allow);
+                    }
+                    
+                    // 3. Reset dimensions for the modal view (Full width/height of container)
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.removeAttribute('width');
+                    iframe.removeAttribute('height');
+                    
+                    // 4. Set HTML
+                    container.innerHTML = `<div class="w-full h-full min-w-[300px] md:min-w-[600px] aspect-video bg-black rounded-lg overflow-hidden">${tempDiv.innerHTML}</div>`;
+                }
             } else {
-                html = `<img src="${content}" class="max-w-full max-h-[85vh] object-contain mx-auto" alt="Expanded Content">`;
+                // Image Content
+                container.innerHTML = `<img src="${content}" class="max-w-full max-h-[85vh] object-contain mx-auto rounded-lg" alt="Expanded Content">`;
             }
             
-            container.innerHTML = html;
             toggleModal('expandedModal', 'expandedContent', true);
         }
 
         function closeExpandedModal() {
             toggleModal('expandedModal', 'expandedContent', false);
+            // Clear content after animation (300ms) to stop video audio
+            setTimeout(() => {
+                document.getElementById('expandedContent').innerHTML = '';
+            }, 300);
         }
 
         const nameInput = document.getElementById('payerName');
