@@ -349,6 +349,15 @@
     <script>
         function initIcons() { if (typeof lucide !== 'undefined') lucide.createIcons(); }
 
+     
+     
+     
+     
+     
+     
+     
+     
+     
         // --- Configuration: Content List ---
         const dailyContentList = [
             "https://res.cloudinary.com/dh8bheu7j/image/upload/01_apgivg.jpg",
@@ -360,18 +369,16 @@
 
         // --- Logic: Render Content into Slots ---
         function renderDailyContent(date) {
-            // Calculate Day of Year (0-365)
-            const start = new Date(date.getFullYear(), 0, 0);
-            const diff = date - start;
-            const oneDay = 1000 * 60 * 60 * 24;
-            const dayOfYear = Math.floor(diff / oneDay);
+            // Modified: Calculate Global Minute (Total minutes since Epoch)
+            // This ensures the content index changes every 60 seconds
+            const globalMinute = Math.floor(date.getTime() / (1000 * 60));
             
             const len = dailyContentList.length;
             
-            // Calculate indices based on day, looping automatically
-            const idx1 = dayOfYear % len;
-            const idx2 = (dayOfYear + 1) % len;
-            const idx3 = (dayOfYear + 2) % len;
+            // Calculate indices based on global minute, looping automatically
+            const idx1 = globalMinute % len;
+            const idx2 = (globalMinute + 1) % len;
+            const idx3 = (globalMinute + 2) % len;
 
             // Update DOM
             updateSlot('dailySlot1', dailyContentList[idx1], false);
@@ -397,10 +404,14 @@
             let overlayHTML = '';
             if (!isLocked) {
                 // Unlocked Badge
+                // Added: "absolute inset-0 z-10" div. This transparent layer sits ON TOP of the video/image.
+                // It captures the click event so the iframe doesn't swallow it.
                 overlayHTML = `
                     <div class="absolute bottom-0 left-0 w-full bg-brand/90 py-0.5 text-center z-20 pointer-events-none">
                         <span class="text-[8px] font-bold text-black uppercase tracking-wider">Unlocked</span>
-                    </div>`;
+                    </div>
+                    <div class="absolute inset-0 z-10 cursor-pointer bg-transparent"></div>
+                `;
                 
                 // Add Click Event to Open Expanded View
                 slot.onclick = function() {
