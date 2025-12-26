@@ -395,29 +395,52 @@
             const blurClass = isLocked ? 'blur-[4px] opacity-50 scale-110 pointer-events-none' : 'object-cover';
             
             if (content.trim().startsWith('<iframe')) {
-                // For 3:4 aspect ratio boxes, we need to ensure the iframe fills it
-                contentHTML = `<div class="w-full h-full ${blurClass}">${content}</div>`;
+                // Video Content
+                // Inject loop parameter immediately during render, so no reload needed on click
+                let videoContent = content;
+                if (!isLocked) {
+                    // Inject loop if not present
+                    videoContent = content.replace(
+                        /src="([^"]+)"/, 
+                        (match, url) => {
+                            const separator = url.includes('?') ? '&' : '?';
+                            // Ensure loop is present. We DO NOT add autoplay here to avoid the "double click" issue caused by reload-blocking.
+                            // We let the user click the native play button once.
+                            return url.includes('loop=true') ? match : `src="${url}${separator}loop=true"`;
+                        }
+                    );
+                }
+                contentHTML = `<div class="w-full h-full ${blurClass}">${videoContent}</div>`;
             } else {
+                // Image Content
                 contentHTML = `<img src="${content}" class="w-full h-full object-cover ${blurClass}" alt="Daily Content">`;
             }
 
             let overlayHTML = '';
             if (!isLocked) {
                 // Unlocked Badge
-                // Added: "absolute inset-0 z-10" div. This transparent layer sits ON TOP of the video/image.
-                // It captures the click event so the iframe doesn't swallow it.
+                // Removed the "click-layer" div so user interacts directly with the content/iframe
+                // Added a data-attribute to the badge so we can find it easily later
                 overlayHTML = `
-                    <div class="absolute bottom-0 left-0 w-full bg-brand/90 py-0.5 text-center z-20 pointer-events-none">
+                    <div id="${slotId}-badge" class="absolute bottom-0 left-0 w-full bg-brand/90 py-0.5 text-center z-20 pointer-events-none transition-transform duration-500 ease-in-out">
                         <span class="text-[8px] font-bold text-black uppercase tracking-wider">Unlocked</span>
                     </div>
-                    <div class="absolute inset-0 z-10 cursor-pointer bg-transparent"></div>
                 `;
                 
-                // Add Click Event to Open Expanded View
-                slot.onclick = function() {
-                    openExpandedModal(content);
-                };
-                slot.classList.add('cursor-pointer');
+                // Add Click Event ONLY for Images (to open expanded view)
+                // For videos, we rely on the native iframe click
+                if (!content.trim().startsWith('<iframe')) {
+                    slot.onclick = function() {
+                        openExpandedModal(content);
+                    };
+                    slot.classList.add('cursor-pointer');
+                } else {
+                    // For Video: We add a class to identify it for the blur-detection trick
+                    slot.classList.add('video-slot');
+                    slot.dataset.badgeId = `${slotId}-badge`;
+                    slot.onclick = null;
+                    slot.classList.remove('cursor-pointer');
+                }
                 
             } else {
                 // Locked Overlay - Updated text location
@@ -449,6 +472,25 @@
             const systemDate = new Date();
             renderDailyContent(systemDate);
         }
+
+        // --- Video Click Detection (Focus Blur Trick) ---
+        // This detects when a user clicks inside an iframe (video), triggering window blur
+        window.addEventListener('blur', function() {
+            if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+                // Find if this iframe belongs to one of our video slots
+                const videoSlots = document.querySelectorAll('.video-slot');
+                videoSlots.forEach(slot => {
+                    if (slot.contains(document.activeElement)) {
+                        // The user clicked this video slot! Hide the badge.
+                        const badgeId = slot.dataset.badgeId;
+                        const badge = document.getElementById(badgeId);
+                        if (badge) {
+                            badge.classList.add('translate-y-full');
+                        }
+                    }
+                });
+            }
+        });
 
         // --- Expanded Modal Logic ---
         function openExpandedModal(content) {
@@ -486,12 +528,14 @@
                     iframe.removeAttribute('width');
                     iframe.removeAttribute('height');
                     
-                    // 4. Set HTML
-                    container.innerHTML = `<div class="w-full h-full min-w-[300px] md:min-w-[600px] aspect-video bg-black rounded-lg overflow-hidden">${tempDiv.innerHTML}</div>`;
+                    // 4. Set HTML - Container set to fill large portion of screen
+                    // Mobile: 95% width, auto height (aspect video)
+                    // Desktop: 80% width, 80% height container
+                    container.innerHTML = `<div class="w-[95vw] md:w-[80vw] md:h-[80vh] aspect-video md:aspect-auto bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-2xl border border-white/10">${tempDiv.innerHTML}</div>`;
                 }
             } else {
                 // Image Content
-                container.innerHTML = `<img src="${content}" class="max-w-full max-h-[85vh] object-contain mx-auto rounded-lg" alt="Expanded Content">`;
+                container.innerHTML = `<img src="${content}" class="max-w-full max-h-[85vh] object-contain mx-auto rounded-lg shadow-2xl" alt="Expanded Content">`;
             }
             
             toggleModal('expandedModal', 'expandedContent', true);
